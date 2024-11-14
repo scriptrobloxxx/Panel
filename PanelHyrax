@@ -1,5 +1,5 @@
 -- Charger la bibliothèque Rayfield
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/scriptrobloxxx/Rayfield1/refs/heads/main/Rayfield'))()
 
 -- Créer la fenêtre principale de Rayfield
 local Window = Rayfield:CreateWindow({
@@ -123,7 +123,7 @@ teleportToMouse()
 
 -- Toggle pour Click TP
 local clickTpToggle = MainTab:CreateToggle({
-    Name = "Téléportation Ctrl + Clique",
+    Name = "Teleportation Ctrl + Click",
     Description = "Active ou désactive la téléportation avec Ctrl + clic gauche",
     CurrentValue = false,
     Flag = "clickTpToggle", -- Identifiant unique pour ce toggle
@@ -142,7 +142,7 @@ local deleteBlocksConnection
 
 -- Toggle pour supprimer les blocs
 local DeleteBlocksToggle = MainTab:CreateToggle({
-	Name = "Supprimer les blocs",
+	Name = "Delete Blocks Ctrl + Click",
 	CurrentValue = false,
 	Flag = "Toggle2",
 	Callback = function(State)
@@ -439,7 +439,10 @@ local player = game.Players.LocalPlayer
 local defaultServerWalkSpeed = player.Character.Humanoid.WalkSpeed
 
 -- Variable pour stocker la vitesse choisie par le joueur via le slider
-local savedWalkSpeed = defaultServerWalkSpeed -- Initialiser à la vitesse du serveur
+local savedWalkSpeed = defaultServerWalkSpeed -- Initialiser à la vitesse par défaut du serveur
+
+-- Variable pour contrôler l'actualisation de la vitesse
+local isUpdatingSpeed = false
 
 -- Créer le slider pour la vitesse de marche
 local Slider = MainTab:CreateSlider({
@@ -458,8 +461,10 @@ local Slider = MainTab:CreateSlider({
             savedWalkSpeed = Value
         end
         -- Appliquer la vitesse uniquement si elle est différente de la vitesse actuelle
-        if player.Character.Humanoid.WalkSpeed ~= savedWalkSpeed then
+        if not isUpdatingSpeed and player.Character.Humanoid.WalkSpeed ~= savedWalkSpeed then
+            isUpdatingSpeed = true
             player.Character.Humanoid.WalkSpeed = savedWalkSpeed
+            isUpdatingSpeed = false
         end
     end,
 })
@@ -468,12 +473,14 @@ local Slider = MainTab:CreateSlider({
 local function onCharacterAdded(character)
     local humanoid = character:WaitForChild("Humanoid")
     humanoid.WalkSpeed = savedWalkSpeed -- Appliquer la vitesse sauvegardée au respawn
-    
+
     -- Surveiller et corriger les modifications de WalkSpeed
     humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
         -- Appliquer la vitesse uniquement si elle est différente de la vitesse actuelle
-        if humanoid.WalkSpeed ~= savedWalkSpeed then
+        if not isUpdatingSpeed and humanoid.WalkSpeed ~= savedWalkSpeed then
+            isUpdatingSpeed = true
             humanoid.WalkSpeed = savedWalkSpeed
+            isUpdatingSpeed = false
         end
     end)
 end
@@ -539,10 +546,13 @@ local InfoSection = InfoTab:CreateSection("Infos")
 
 ------------------------------------- Dex
 
--- Fonction pour ouvrir le script Dex
+-- Variable pour suivre l'état du bouton (activé/désactivé)
+local dexEnabled = false
+
+-- Fonction pour ouvrir le script Dex depuis le lien GitHub
 local function openDexScript()
     pcall(function()
-        -- Charger le script Dex
+        -- Charger le script Dex depuis le lien GitHub
         local dexScriptSource = game:HttpGet("https://raw.githubusercontent.com/scriptrobloxxx/Dex/main/DexScript")
         local dexScriptFunction = loadstring(dexScriptSource)
         
@@ -553,13 +563,65 @@ local function openDexScript()
     end)
 end
 
--- Bouton pour ouvrir le script Dex
-local dexButton = InfoTab:CreateButton({
+-- Fonction pour gérer l'affichage du GUI Dex
+local function handleDexGUI(player, enable)
+    local playerGui = player:WaitForChild("PlayerGui")
+    local dexGui = playerGui:FindFirstChild("Dex")
+    
+    if enable then
+        -- Si le GUI Dex n'existe pas encore, on le crée
+        if not dexGui then
+            local dexClone = Instance.new("ScreenGui")
+            dexClone.Name = "Dex"
+            dexClone.Parent = playerGui
+        end
+        
+        -- Rendre le GUI visible
+        dexGui.Enabled = true
+    else
+        -- Supprimer le GUI Dex seulement si le bouton est désactivé
+        if dexGui then
+            dexGui:Destroy()
+        end
+    end
+end
+
+-- Fonction pour réactiver le Dex et le GUI lors du respawn
+local function resetDexAfterRespawn(player)
+    player.CharacterAdded:Connect(function(character)
+        -- Attendre que le PlayerGui soit chargé après le respawn
+        local playerGui = player:WaitForChild("PlayerGui")
+        
+        -- Charger à nouveau le script Dex lors du respawn si le bouton est activé
+        if dexEnabled then
+            openDexScript()
+            -- S'assurer que le GUI Dex est affiché si le bouton est activé
+            handleDexGUI(player, true)
+        end
+    end)
+end
+
+-- Bouton pour ouvrir/fermer le script Dex
+local dexButton = InfoTab:CreateToggle({
     Name = "Dex Explorer",
-    Callback = function()
-        openDexScript()
+    Callback = function(isEnabled)
+        -- Met à jour l'état du bouton
+        dexEnabled = isEnabled
+        
+        if isEnabled then
+            openDexScript()
+            -- Activer le GUI Dex
+            handleDexGUI(game.Players.LocalPlayer, true)
+        else
+            -- Désactiver le GUI Dex
+            handleDexGUI(game.Players.LocalPlayer, false)
+        end
     end
 })
+
+-- Assurez-vous que le script Dex et le GUI soient réactivés lors du respawn, uniquement si le bouton est activé
+resetDexAfterRespawn(game.Players.LocalPlayer)
+
 
 -------------------------------------
 
@@ -580,18 +642,27 @@ local function createUI()
 	end
 
 	local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-	local screenGui = Instance.new("ScreenGui", playerGui)
+	-- Utilisation de CoreGui pour s'afficher au-dessus de tout
+	local coreGui = game:GetService("CoreGui")
+	local screenGui = Instance.new("ScreenGui", coreGui)  -- Changer PlayerGui à CoreGui
 	return {
 		pathLabel = createTextLabel(screenGui, UDim2.new(0.5, -250, 0, 10), ""),
 		blockPositionLabel = createTextLabel(screenGui, UDim2.new(0.5, -250, 0, 70), ""),
 		positionLabel = createTextLabel(screenGui, UDim2.new(0.5, -250, 0, 130), ""),
 		bodyAngleLabel = createTextLabel(screenGui, UDim2.new(0.5, -250, 0, 190), ""),
-		angleLabel = createTextLabel(screenGui, UDim2.new(0.5, -250, 0, 250), "")
+		angleLabel = createTextLabel(screenGui, UDim2.new(0.5, -250, 0, 250), ""),
+		guiPathLabel = createTextLabel(screenGui, UDim2.new(0.5, -250, 0, 310), "")
 	}
 end
 
+-- Fonction pour filtrer "Ugc." du chemin
+local function filterUgcPath(path)
+	-- Enlever "Ugc." de tous les chemins
+	return path:gsub("Ugc%.", "")
+end
+
 -- Initialisation UI et Variables d'affichage
-local ui, showPath, showPosition, showAngle, showBodyAngle, showBlockPosition = createUI(), false, false, false, false, false
+local ui, showPath, showPosition, showAngle, showBodyAngle, showBlockPosition, showGuiPath = createUI(), false, false, false, false, false, false
 
 -- Fonction pour mettre à jour les labels
 local function updateLabels()
@@ -605,14 +676,14 @@ local function updateLabels()
 		if showPath then
 			local mouse = player:GetMouse()
 			local target = mouse.Target
-			ui.pathLabel.Text = target and target:IsA("BasePart") and "Chemin du bloc visé : " .. table.concat((function()
+			ui.pathLabel.Text = target and target:IsA("BasePart") and "Chemin du bloc visé : " .. filterUgcPath(table.concat((function()
 				local path, current = {}, target
 				while current do
 					table.insert(path, 1, current.Name)
 					current = current.Parent
 				end
 				return path
-			end)(), ".") or "Aucun bloc visé ou le bloc n'est pas une BasePart"
+			end)(), ".")) or "Aucun bloc visé ou le bloc n'est pas une BasePart"
 		end
 		if showBlockPosition then
 			local mouse = player:GetMouse()
@@ -632,6 +703,33 @@ local function updateLabels()
 			local viewDirection = camera.CFrame.LookVector
 			local playerDirection = (camera.CFrame.Position - hrp.Position).unit
 			ui.angleLabel.Text = string.format("Angle de vue : %.2f°", math.deg(math.acos(viewDirection:Dot(playerDirection))))
+		end
+		if showGuiPath then
+			local mouse = player:GetMouse()
+			local guiElementUnderMouse = nil
+			for _, element in ipairs(player.PlayerGui:GetDescendants()) do
+				if element:IsA("GuiObject") and element.Visible then
+					local elementPosition = element.AbsolutePosition
+					local elementSize = element.AbsoluteSize
+					local mouseLocation = mouse.Hit.p
+					if mouseLocation.X >= elementPosition.X and mouseLocation.X <= elementPosition.X + elementSize.X and
+					   mouseLocation.Y >= elementPosition.Y and mouseLocation.Y <= elementPosition.Y + elementSize.Y then
+						guiElementUnderMouse = element
+						break
+					end
+				end
+			end
+			if guiElementUnderMouse then
+				local path = {}
+				local current = guiElementUnderMouse
+				while current do
+					table.insert(path, 1, current.Name)
+					current = current.Parent
+				end
+				ui.guiPathLabel.Text = "Chemin du GUI visé : " .. filterUgcPath(table.concat(path, "."))
+			else
+				ui.guiPathLabel.Text = "Aucun élément GUI visé."
+			end
 		end
 	end
 end
@@ -655,6 +753,7 @@ createToggle("Afficher la position du bloc visé", "Affiche la position actuelle
 createToggle("Afficher la position du joueur", "Affiche la position actuelle du joueur dans le TextLabel", "positionToggle", function(state) showPosition = state ui.positionLabel.Visible = state end)
 createToggle("Afficher l'angle du corps", "Affiche l'angle du corps du joueur en degrés dans le TextLabel", "bodyAngleToggle", function(state) showBodyAngle = state ui.bodyAngleLabel.Visible = state end)
 createToggle("Afficher l'angle de vue", "Affiche l'angle de vue du joueur en degrés dans le TextLabel", "angleToggle", function(state) showAngle = state ui.angleLabel.Visible = state end)
+createToggle("Afficher le chemin du GUI", "Affiche le chemin du GUI visé dans le TextLabel", "guiPathToggle", function(state) showGuiPath = state ui.guiPathLabel.Visible = state end)
 
 -- Fonctions de copie avec debounce
 local function copyToClipboard(text, title)
@@ -662,64 +761,56 @@ local function copyToClipboard(text, title)
 	game.StarterGui:SetCore("SendNotification", { Title = title, Text = text, Duration = 5 })
 end
 
-local debounce = { path = false, position = false, angle = false, bodyAngle = false, blockPosition = false }
+local debounce = { path = false, position = false, angle = false, bodyAngle = false, blockPosition = false, guiPath = false }
 local function copyPathToClipboard()
 	if debounce.path then return end
 	debounce.path = true
 	local target = game.Players.LocalPlayer:GetMouse().Target
 	if target and target:IsA("BasePart") then
-		copyToClipboard(table.concat((function()
+		local path = table.concat((function()
 			local path, current = {}, target
 			while current do
 				table.insert(path, 1, current.Name)
 				current = current.Parent
 			end
 			return path
-		end)(), "."), "Chemin copié")
+		end)(), ".")
+		copyToClipboard(filterUgcPath(path), "Chemin du bloc copié")
 	end
 	wait(1)
 	debounce.path = false
 end
 
-local function copyBlockPositionToClipboard()
-	if debounce.blockPosition then return end
-	debounce.blockPosition = true
-	local target = game.Players.LocalPlayer:GetMouse().Target
-	if target and target:IsA("BasePart") then
-		copyToClipboard(string.format("X: %.2f, Y: %.2f, Z: %.2f", target.Position.X, target.Position.Y, target.Position.Z), "Position du bloc copiée")
+local function copyGuiPathToClipboard()
+	if debounce.guiPath then return end
+	debounce.guiPath = true
+	local mouse = game.Players.LocalPlayer:GetMouse()
+	local guiElementUnderMouse = nil
+	for _, element in ipairs(game.Players.LocalPlayer.PlayerGui:GetDescendants()) do
+		if element:IsA("GuiObject") and element.Visible then
+			local elementPosition = element.AbsolutePosition
+			local elementSize = element.AbsoluteSize
+			local mouseLocation = mouse.Hit.p
+			if mouseLocation.X >= elementPosition.X and mouseLocation.X <= elementPosition.X + elementSize.X and
+			   mouseLocation.Y >= elementPosition.Y and mouseLocation.Y <= elementPosition.Y + elementSize.Y then
+				guiElementUnderMouse = element
+				break
+			end
+		end
+	end
+	if guiElementUnderMouse then
+		local path = {}
+		local current = guiElementUnderMouse
+		while current do
+			table.insert(path, 1, current.Name)
+			current = current.Parent
+		end
+		copyToClipboard(filterUgcPath(table.concat(path, ".")), "Chemin du GUI copié")
+	else
+		copyToClipboard("Aucun élément GUI visé.", "Erreur de copie GUI")
 	end
 	wait(1)
-	debounce.blockPosition = false
-end
-
-local function copyPositionToClipboard()
-	if debounce.position then return end
-	debounce.position = true
-	local position = game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart").Position
-	copyToClipboard(string.format("X: %.2f, Y: %.2f, Z: %.2f", position.X, position.Y, position.Z), "Position copiée")
-	wait(1)
-	debounce.position = false
-end
-
-local function copyAngleToClipboard()
-	if debounce.angle then return end
-	debounce.angle = true
-	local camera, hrp = game.Workspace.CurrentCamera, game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-	local viewDirection, playerDirection = camera.CFrame.LookVector, (camera.CFrame.Position - hrp.Position).unit
-	copyToClipboard(string.format("%.2f°", math.deg(math.acos(viewDirection:Dot(playerDirection)))), "Angle de vue copié")
-	wait(1)
-	debounce.angle = false
-end
-
-local function copyBodyAngleToClipboard()
-	if debounce.bodyAngle then return end
-	debounce.bodyAngle = true
-	local hrp = game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-	local bodyOrientation = hrp.CFrame - hrp.Position
-	local angle = math.deg(math.atan2(bodyOrientation.LookVector.X, bodyOrientation.LookVector.Z))
-	copyToClipboard(string.format("%.2f°", angle), "Angle du corps copié")
-	wait(1)
-	debounce.bodyAngle = false
+	debounce.guiPath = false
 end
 
 -- Écouter les entrées clavier
@@ -730,8 +821,10 @@ game:GetService("UserInputService").InputBegan:Connect(function(input, gameProce
 	elseif input.KeyCode == Enum.KeyCode.KeypadThree then copyPositionToClipboard()
 	elseif input.KeyCode == Enum.KeyCode.KeypadFour and showBodyAngle then copyBodyAngleToClipboard()
 	elseif input.KeyCode == Enum.KeyCode.KeypadFive and showAngle then copyAngleToClipboard()
+	elseif input.KeyCode == Enum.KeyCode.KeypadSix and showGuiPath then copyGuiPathToClipboard()
 	end
 end)
+
 
 -------------------------------------------------------------------------- Fun
 
@@ -878,9 +971,31 @@ local function disableTelekinesis()
     end
 end
 
+-- Fonction pour restaurer l'outil de télékinésie après le respawn du joueur
+local function restoreTelekinesisOnRespawn()
+    local player = game.Players.LocalPlayer
+
+    -- Lorsqu'un personnage du joueur est ajouté (ou réapparaît après la mort)
+    player.CharacterAdded:Connect(function(character)
+        -- Attendre que le personnage et le Humanoid soient prêts
+        local humanoid = character:WaitForChild("Humanoid")
+
+        -- Vérifier si l'outil de télékinésie est dans l'inventaire
+        local telekinesisTool = player.Backpack:FindFirstChild("Telekinesis")
+        
+        -- Si l'outil de télékinésie n'est pas trouvé dans l'inventaire, on le rétablit
+        if not telekinesisTool and telekinesisEnabled and not loading then
+            loading = true
+            executeTelekinesisScript()  -- Réexécuter le script pour restaurer l'objet
+            wait(2)  -- Attendre un peu pour le chargement
+            loading = false
+        end
+    end)
+end
+
 -- Bouton Toggle pour activer/désactiver le script de télékinésie
 local telekinesisToggle = FunTab:CreateToggle({
-    Name = "Télékinésie",
+    Name = "Telekinesis",
     Default = false,
     Callback = function(state)
         if state and not loading then
@@ -902,6 +1017,9 @@ local telekinesisToggle = FunTab:CreateToggle({
         end
     end
 })
+
+-- Appeler la fonction pour restaurer l'objet de télékinésie après le respawn du joueur
+restoreTelekinesisOnRespawn()
 
 --------------------------------------------- Ender Perle
 
@@ -1110,6 +1228,216 @@ local teleportPearlToggle = FunTab:CreateToggle({
 })
 
 
+--------------------------------------------- Magnet
+
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local MagnetToggle = FunTab:CreateToggle({
+    Name = "Magnet",
+    Description = "Magnet.",
+    Callback = function()
+        toggleMagnet()
+    end
+})
+
+local isMagnetEnabled = false
+local targetPlayer = nil
+local scriptIsLoaded = false
+local cowerAnimationId = "http://www.roblox.com/asset/?id=4940563117"
+local currentAnimation = nil
+local animationCheckCoroutine = nil
+local oscillationSpeed = 40  -- Vitesse du va-et-vient
+local tweenDuration = 0.2  -- Durée d'interpolation
+
+-- Fonction pour jouer l'animation "Cower" uniquement quand une cible est définie
+local function playCowerAnimation()
+    if targetPlayer and isMagnetEnabled then
+        local character = game.Players.LocalPlayer.Character
+        if character then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local animation = Instance.new("Animation")
+                animation.AnimationId = cowerAnimationId
+
+                if currentAnimation then
+                    currentAnimation:Stop()
+                end
+
+                currentAnimation = humanoid:LoadAnimation(animation)
+                currentAnimation:Play()
+            end
+        end
+    end
+end
+
+-- Fonction pour désactiver l'animation "Cower"
+local function stopCowerAnimation()
+    if currentAnimation then
+        currentAnimation:Stop()
+        currentAnimation = nil
+    end
+end
+
+-- Fonction pour vérifier périodiquement que l'animation "Cower" est jouée
+local function startAnimationCheck()
+    animationCheckCoroutine = coroutine.create(function()
+        while isMagnetEnabled and targetPlayer do
+            wait(0.1)
+            local character = game.Players.LocalPlayer.Character
+            if character then
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                if humanoid and (not currentAnimation or not currentAnimation.IsPlaying) then
+                    playCowerAnimation()
+                end
+            end
+        end
+    end)
+    coroutine.resume(animationCheckCoroutine)
+end
+
+-- Fonction pour arrêter la vérification de l'animation
+local function stopAnimationCheck()
+    if animationCheckCoroutine then
+        coroutine.close(animationCheckCoroutine)
+        animationCheckCoroutine = nil
+    end
+end
+
+-- Fonction pour activer ou désactiver le "magnet"
+function toggleMagnet()
+    isMagnetEnabled = not isMagnetEnabled
+    if isMagnetEnabled then
+        StarterGui:SetCore("SendNotification", {
+            Title = "Magnet Script",
+            Text = "Attendez quelques secondes, le script charge.",
+            Icon = "rbxassetid://123456789",
+            Duration = 5
+        })
+
+        if not scriptIsLoaded then
+            StarterGui:SetCore("SendNotification", {
+                Title = "Magnet Activé",
+                Text = "Le script est prêt à être utilisé, cliquez sur un joueur !",
+                Icon = "rbxassetid://123456789",
+                Duration = 5
+            })
+            scriptIsLoaded = true
+        end
+
+        if targetPlayer then
+            playCowerAnimation()
+            startAnimationCheck()
+        end
+    else
+        stopCowerAnimation()
+        stopAnimationCheck()
+        targetPlayer = nil
+    end
+end
+
+-- Fonction pour détecter un clic sur un joueur
+function onPlayerClick()
+    local mouse = game.Players.LocalPlayer:GetMouse()
+    local target = mouse.Target
+
+    -- Vérification pour s'assurer que le joueur est bien cliqué, même s'il porte un chapeau ou un cosmétique
+    if target and target.Parent and target.Parent:FindFirstChild("Humanoid") then
+        local clickedPlayer = game.Players:GetPlayerFromCharacter(target.Parent)
+        if clickedPlayer then
+            if targetPlayer == clickedPlayer then
+                -- Désactive la cible si on reclique dessus
+                targetPlayer = nil
+                stopCowerAnimation()
+            else
+                -- Change la cible
+                targetPlayer = clickedPlayer
+                if isMagnetEnabled then
+                    playCowerAnimation()
+                    startAnimationCheck()
+                end
+            end
+        end
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        onPlayerClick()
+    elseif input.KeyCode == Enum.KeyCode.LeftControl then
+        -- Si Ctrl est appuyé, arrête de suivre la cible
+        if isMagnetEnabled then
+            stopCowerAnimation()
+            targetPlayer = nil
+            print("Magnet arrêté à cause de la touche Ctrl")
+        end
+    end
+end)
+
+-- Fonction de gestion du respawn pour rejouer l'animation après la mort si nécessaire
+game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
+    -- Cette fonction sera appelée chaque fois qu'un joueur respawn
+
+    -- Assurez-vous que l'animation n'est pas jouée avant que le respawn soit complet
+    character:WaitForChild("HumanoidRootPart")  -- Attendre la fin de la création du personnage
+    wait(0.1)  -- Attendre un peu pour éviter un déclenchement trop rapide
+
+    -- Vérifier si l'animation doit être jouée à ce moment
+    if isMagnetEnabled and targetPlayer then
+        -- Rejouer l'animation après le respawn
+        playCowerAnimation()
+        startAnimationCheck()
+    end
+
+    -- Gérer la mort et l'arrêt de l'animation à la mort
+    character:WaitForChild("Humanoid").Died:Connect(function()
+        if isMagnetEnabled and targetPlayer then
+            stopCowerAnimation()  -- Arrêter l'animation à la mort
+        end
+    end)
+end)
+
+-- Déplacement du joueur vers la cible avec va-et-vient fluide
+game:GetService("RunService").Heartbeat:Connect(function()
+    if isMagnetEnabled and targetPlayer then
+        local playerToMagnet = game.Players.LocalPlayer
+        local playerCharacter = playerToMagnet.Character
+        if playerCharacter then
+            local playerHRP = playerCharacter:FindFirstChild("HumanoidRootPart")
+            local targetHRP = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if playerHRP and targetHRP then
+                local backwardDirection = -targetHRP.CFrame.LookVector
+
+                -- Position pour le va-et-vient derrière la cible
+                local targetPosition1 = targetHRP.Position + backwardDirection * 0.1
+                local targetPosition2 = targetHRP.Position + backwardDirection * 4
+
+                -- Choisir la position X et Z pour le va-et-vient
+                local moveToPosition = (math.sin(tick() * oscillationSpeed) > 0) and targetPosition1 or targetPosition2
+
+                -- Synchronisation de la position Y du joueur avec celle du joueur cible
+                moveToPosition = Vector3.new(moveToPosition.X, targetHRP.Position.Y, moveToPosition.Z)
+
+                local tweenInfo = TweenInfo.new(tweenDuration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+                local newCFrame = CFrame.new(moveToPosition, targetHRP.Position)
+                local tween = TweenService:Create(playerHRP, tweenInfo, {CFrame = newCFrame})
+                tween:Play()
+            end
+        end
+    end
+end)
+
+game.Players.PlayerRemoving:Connect(function(player)
+    if targetPlayer == player then
+        targetPlayer = nil
+        stopCowerAnimation()
+    end
+end)
+
+
 ------------------------------------- Emotes
 
 ------------------------------------------------------------------
@@ -1270,7 +1598,7 @@ end
 
 -- Slider pour ajuster l'heure de la journée
 local Slider = UtilTab:CreateSlider({
-	Name = "TimeOfDay",
+	Name = "Time Of Day",
 	Range = {0, 24}, -- Plage de 0 à 24 heures
 	Increment = 0.1, -- Incrément de 1 heure
 	Suffix = "h", -- Suffixe pour l'affichage des heures
@@ -1293,74 +1621,87 @@ local Slider = UtilTab:CreateSlider({
 Slider:Set(0)
 
 
-------------------------------------- Azerty
 
--- Table de mappage des touches
-local keyMappings = {
-	[Enum.KeyCode.Z] = Enum.KeyCode.W,
-	[Enum.KeyCode.Q] = Enum.KeyCode.A,
-	-- Ajoutez d'autres remappages ici si nécessaire
-}
+------------------------------------- Afficher Icon
 
-local UserInputService = game:GetService("UserInputService")
+-- Variables pour la gestion du curseur
+local player = game.Players.LocalPlayer
+local mouse = player:GetMouse()
 
--- Variables pour stocker les connexions
-local keyPressConnection
-local keyReleaseConnection
+-- Enregistre l'icône de curseur actuelle (soit personnalisée, soit par défaut)
+local originalCursorIcon = mouse.Icon or ""  -- Si aucune icône n'est définie, prend "" par défaut
+local customCursorIconId = "rbxassetid://11716452453"  -- ID de l'icône personnalisée
+local isCustomIconEnabled = false  -- Garde en mémoire l'état du curseur
 
--- Fonction pour gérer l'appui sur les touches
-local function handleKeyPress(input, gameProcessedEvent)
-	if gameProcessedEvent then return end
-
-	local remappedKey = keyMappings[input.KeyCode]
-	if remappedKey then
-		keypress(remappedKey.Value)
-	end
-end
-
--- Fonction pour gérer le relâchement des touches
-local function handleKeyRelease(input, gameProcessedEvent)
-	if gameProcessedEvent then return end
-
-	local remappedKey = keyMappings[input.KeyCode]
-	if remappedKey then
-		keyrelease(remappedKey.Value)
-	end
-end
-
--- Fonction pour activer le remappage des touches
-local function enableKeyRemapping()
-	keyPressConnection = UserInputService.InputBegan:Connect(handleKeyPress)
-	keyReleaseConnection = UserInputService.InputEnded:Connect(handleKeyRelease)
-end
-
--- Fonction pour désactiver le remappage des touches
-local function disableKeyRemapping()
-	if keyPressConnection then
-		keyPressConnection:Disconnect()
-		keyPressConnection = nil
-	end
-	if keyReleaseConnection then
-		keyReleaseConnection:Disconnect()
-		keyReleaseConnection = nil
-	end
-end
-
--- Toggle pour activer/désactiver le remappage des touches
-local remapToggle = UtilTab:CreateToggle({
-	Name = "Azerty",
-	Description = "Active or deactivate key remapping",
-	CurrentValue = false,
-	Flag = "remapToggle", -- Identifiant unique pour ce toggle
-	Callback = function(state)
-		if state then
-			enableKeyRemapping()
-		else
-			disableKeyRemapping()
+-- Fonction pour afficher ou masquer l'icône de curseur personnalisée
+local function toggleCursorIcon(state)
+	if state then
+		-- Sauvegarde l'icône actuelle si elle n'a pas été déjà enregistrée
+		if originalCursorIcon == "" then
+			originalCursorIcon = mouse.Icon  -- Sauvegarde l'icône actuelle, même si c'est l'icône par défaut
 		end
+		-- Affiche l'icône personnalisée
+		mouse.Icon = customCursorIconId
+	else
+		-- Restaure l'icône précédente, ou remet l'icône par défaut si aucune sauvegarde n'était faite
+		mouse.Icon = originalCursorIcon or ""
+	end
+end
+
+-- Création du bouton "Afficher Icon" dans l'interface utilisateur
+local showIconToggle = UtilTab:CreateToggle({
+	Name = "Afficher Icon",
+	Description = "Affiche ou masque l'icône de curseur personnalisée",
+	CurrentValue = false,
+	Flag = "showIconToggle",  -- Identifiant unique pour ce toggle
+	Callback = function(state)
+		isCustomIconEnabled = state
+		toggleCursorIcon(isCustomIconEnabled)
 	end,
 })
 
+------------------------------------- ESP
+
+-- Toggle pour l'ESP
+local espTpToggle = UtilTab:CreateToggle({
+    Name = "Afficher ESP",
+    Description = "Active ou désactive l'ESP",
+    CurrentValue = false,
+    Flag = "espToggle",  -- Identifiant unique pour ce toggle
+    Callback = function(state)
+        if state then
+            -- Charger le script ESP quand le toggle est activé
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/scriptrobloxxx/ESP.lua/refs/heads/main/ESP.lua"))()
+
+            -- Activer les paramètres de l'ESP
+            _G.WRDESPEnabled = true
+            _G.WRDESPBox = true
+            _G.WRDESPGlow = true
+            _G.WRDESPNames = true
+            _G.WRDESPTracers = true
+            _G.WRDESPTeamColors = true
+
+            print("ESP activé")
+        else
+            -- Désactiver l'ESP quand le toggle est désactivé
+            _G.WRDESPEnabled = false -- Désactive l'ESP
+            _G.WRDESPBox = false -- Désactive les boîtes autour des joueurs
+            _G.WRDESPGlow = false -- Désactive l'effet de glow
+            _G.WRDESPNames = false -- Désactive l'affichage des noms
+            _G.WRDESPTracers = false -- Désactive les tracers
+            _G.WRDESPTeamColors = false -- Désactive les couleurs de l'équipe
+
+            -- Enlever les objets ESP existants
+            if RemoveESP then
+                RemoveESP()
+            else
+                print("Fonction RemoveESP non trouvée.")
+            end
+
+            print("ESP désactivé")
+        end
+    end
+})
 
 -------------------------------------------------------------------------- TP Players
 
@@ -1370,6 +1711,9 @@ local UtilSection = UtilTab:CreateSection("Players")
 
 -- Table pour stocker les boutons associés aux joueurs
 local playerButtons = {}
+
+-- URL de l'icône pour les amis
+local friendIcon = "URL_DE_VOTRE_ICONE"
 
 -- Fonction pour téléporter le joueur local à un autre joueur
 local function teleportToPlayer(targetPlayer)
@@ -1382,26 +1726,42 @@ local function teleportToPlayer(targetPlayer)
     end
 end
 
--- Fonction pour créer un bouton pour un joueur spécifique
+-- Fonction pour créer un bouton pour un joueur
 local function createPlayerButton(player)
+    -- Si un bouton existe déjà pour ce joueur, on ne fait rien
+    if playerButtons[player.Name] then return end
+
     -- Obtenir le pseudonyme d'affichage et le vrai nom du joueur
     local displayName = player.DisplayName
     local userName = player.Name
 
-    -- Créer un bouton avec le pseudonyme d'affichage et le vrai nom entre parenthèses
+    -- Vérifier si le joueur est un ami
+    local isFriend = game.Players.LocalPlayer:IsFriendsWith(player.UserId)
+
+    -- Créer un bouton avec une icône si le joueur est un ami
     local tpButton = UtilTab:CreateButton({
-        Name = displayName .. " (" .. userName .. ")",
+        Name = (isFriend and "⭐  " or "") .. displayName .. " (" .. userName .. ")",
+        Icon = isFriend and friendIcon or nil, -- Ajouter une icône si c'est un ami
         Callback = function()
             teleportToPlayer(player)
         end
     })
 
-    -- Stocker le bouton dans la table avec le joueur comme clé
-    playerButtons[player] = tpButton
+    -- Stocker le bouton dans la table avec le nom du joueur comme clé
+    playerButtons[player.Name] = tpButton
 end
 
--- Fonction pour créer des boutons pour tous les joueurs existants
-local function createPlayerButtons()
+-- Fonction pour supprimer un bouton associé à un joueur
+local function deletePlayerButton(playerName)
+    local button = playerButtons[playerName]
+    if button then
+        button:Destroy()  -- Supprimer le bouton de l'interface
+        playerButtons[playerName] = nil  -- Retirer de la table
+    end
+end
+
+-- Fonction pour initialiser les boutons pour tous les joueurs actuellement présents
+local function initializePlayerButtons()
     local localPlayer = game.Players.LocalPlayer
     for _, player in ipairs(game.Players:GetPlayers()) do
         -- Ne pas créer de bouton pour le joueur local
@@ -1411,25 +1771,17 @@ local function createPlayerButtons()
     end
 end
 
+-- Écouter l'ajout d'un nouveau joueur pour créer un bouton
+game.Players.PlayerAdded:Connect(function(player)
+    if player ~= game.Players.LocalPlayer then
+        createPlayerButton(player)
+    end
+end)
+
+-- Écouter le départ d'un joueur pour supprimer son bouton
+game.Players.PlayerRemoving:Connect(function(player)
+    deletePlayerButton(player.Name)
+end)
+
 -- Initialiser les boutons lors du lancement du script
-createPlayerButtons()
-
--- Ajouter un bouton pour le nouveau joueur lorsqu'il rejoint
-game.Players.PlayerAdded:Connect(function(newPlayer)
-    -- Ne pas créer de bouton pour le joueur local
-    if newPlayer ~= game.Players.LocalPlayer then
-        createPlayerButton(newPlayer)
-    end
-end)
-
--- Supprimer le bouton lorsqu'un joueur quitte
-game.Players.PlayerRemoving:Connect(function(leavingPlayer)
-    -- Vérifier si le bouton pour ce joueur existe dans la table
-    local button = playerButtons[leavingPlayer]
-    if button then
-        -- Supprimer le bouton de l'interface
-        button:Destroy()
-        -- Retirer le bouton de la table
-        playerButtons[leavingPlayer] = nil
-    end
-end)
+initializePlayerButtons()
