@@ -601,6 +601,9 @@ local function resetDexAfterRespawn(player)
     end)
 end
 
+-- Assurez-vous que le script Dex et le GUI soient réactivés lors du respawn, uniquement si le bouton est activé
+resetDexAfterRespawn(game.Players.LocalPlayer)
+
 -- Bouton pour ouvrir/fermer le script Dex
 local dexButton = InfoTab:CreateToggle({
     Name = "Dex Explorer",
@@ -619,8 +622,6 @@ local dexButton = InfoTab:CreateToggle({
     end
 })
 
--- Assurez-vous que le script Dex et le GUI soient réactivés lors du respawn, uniquement si le bouton est activé
-resetDexAfterRespawn(game.Players.LocalPlayer)
 
 
 -------------------------------------
